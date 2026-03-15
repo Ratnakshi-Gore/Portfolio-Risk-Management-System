@@ -1,0 +1,36 @@
+# Environment & secrets
+.env
+*.env
+
+# Cached data (can be re-downloaded)
+data/processed/
+data/raw/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# MLflow runs (large, regeneratable)
+mlruns/
+mlartifacts/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
