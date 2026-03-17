@@ -128,7 +128,7 @@ def set_cell(ws, row, col, value, bold=False, font_color=None,
 # Sheet writers
 
 def write_analysis_sheet(ws, metrics_summary, metadata, regime_info, ff_results,
-                         tickers, backtest_years):
+                         tickers, backtest_years, sector_map=None, weights=None):
     # Populate the Analysis sheet with dashboard data.
     clear_sheet(ws)
 
@@ -206,6 +206,37 @@ def write_analysis_sheet(ws, metrics_summary, metadata, regime_info, ff_results,
             set_cell(ws, row, 1, k, bold=True)
             set_cell(ws, row, 2, v)
             row += 1
+
+    # Sector Allocation
+    if sector_map and weights is not None:
+        row += 1
+        set_cell(ws, row, 1, "Sector Allocation",
+                 bold=True, font_size=12, font_color=NAVY)
+        row += 1
+        set_cell(ws, row, 1, "Sector", bold=True,
+                 font_color=WHITE, fill_color=HEADER_FILL)
+        set_cell(ws, row, 2, "Weight", bold=True,
+                 font_color=WHITE, fill_color=HEADER_FILL)
+        set_cell(ws, row, 3, "Tickers", bold=True,
+                 font_color=WHITE, fill_color=HEADER_FILL)
+        row += 1
+
+        from collections import defaultdict
+        sector_weights = defaultdict(float)
+        sector_tickers = defaultdict(list)
+        for t, w in weights.items():
+            sec = sector_map.get(t, "Unknown")
+            sector_weights[sec] += w
+            if w > 0:
+                sector_tickers[sec].append(t)
+
+        for sec in sorted(sector_weights.keys(), key=lambda s: -sector_weights[s]):
+            sw = sector_weights[sec]
+            if sw > 0:
+                set_cell(ws, row, 1, sec)
+                set_cell(ws, row, 2, f"{sw:.2%}")
+                set_cell(ws, row, 3, ", ".join(sector_tickers[sec]))
+                row += 1
 
     # Auto-fit columns
     ws.Columns("A:D").AutoFit()
@@ -525,6 +556,12 @@ def main():
             metadata = bt["metadata"]
 
             write_status(ws_analysis, "Writing results to Analysis sheet...")
+            # Get latest weights and sector map for sector allocation
+            latest_weights = {}
+            if bt["weights_history"]:
+                _, latest_weights = bt["weights_history"][-1]
+            sector_map = bt.get("sector_map", {})
+
             write_analysis_sheet(
                 ws=ws_analysis,
                 metrics_summary=results["summary"],
@@ -533,6 +570,8 @@ def main():
                 ff_results=results["ff_results"],
                 tickers=tickers,
                 backtest_years=backtest_years,
+                sector_map=sector_map,
+                weights=latest_weights,
             )
 
             write_status(ws_analysis, "Writing Backtest sheet...")

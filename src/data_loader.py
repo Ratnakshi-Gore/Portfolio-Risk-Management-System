@@ -210,6 +210,18 @@ def get_fundamentals(
     return df
 
 
+def get_sector_map(tickers: List[str]) -> dict:
+    """Return {ticker: sector} dict using cached fundamentals data."""
+    fundamentals = get_fundamentals(tickers)
+    sector_map = {}
+    for t in tickers:
+        if t in fundamentals.index and "sector" in fundamentals.columns:
+            sector_map[t] = fundamentals.loc[t, "sector"] if pd.notna(fundamentals.loc[t, "sector"]) else "Unknown"
+        else:
+            sector_map[t] = "Unknown"
+    return sector_map
+
+
 def get_fred_data(
     series_ids: Optional[List[str]] = None,
     start: str = "2000-01-01",

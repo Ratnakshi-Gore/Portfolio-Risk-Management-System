@@ -35,7 +35,7 @@ backtest_years = st.sidebar.slider(
 )
 
 mc_simulations = st.sidebar.number_input(
-    "Monte Carlo Simulations", min_value=100, max_value=10000,
+    "Monte Carlo Simulations", min_value=100, max_value=250000,
     value=1000, step=500,
 )
 
@@ -77,6 +77,7 @@ def run_full_pipeline(tickers_str, years, n_sims):
     bt = run_backtest(tickers=tickers, start_date=start_date, end_date=end_date,
                       rebalance_freq="M", initial_value=100_000)
     results["bt"] = bt
+    results["sector_map"] = bt.get("sector_map", {})
 
     # 2. Risk metrics
     metrics = compute_all_metrics(bt["daily_returns"], bt["benchmark_returns"])
@@ -204,8 +205,8 @@ with tab1:
 
     st.markdown("---")
 
-    # Weights pie chart and regime info
-    c1, c2 = st.columns([1, 1])
+    # Weights pie chart, sector allocation, and regime info
+    c1, c2, c3 = st.columns([1, 1, 1])
 
     with c1:
         st.subheader("Current Portfolio Weights")
@@ -224,6 +225,29 @@ with tab1:
             st.plotly_chart(fig_pie, use_container_width=True)
 
     with c2:
+        st.subheader("Sector Allocation")
+        sector_map = R.get("sector_map", {})
+        if scores is not None and sector_map:
+            w = scores["Weight"]
+            w = w[w > 0]
+            sector_weights = {}
+            for ticker, wt in w.items():
+                sec = sector_map.get(ticker, "Unknown")
+                sector_weights[sec] = sector_weights.get(sec, 0) + wt
+            if sector_weights:
+                fig_sector = go.Figure(data=[go.Pie(
+                    labels=list(sector_weights.keys()),
+                    values=list(sector_weights.values()),
+                    hole=0.4,
+                    textinfo="label+percent",
+                    marker=dict(colors=px.colors.qualitative.Pastel),
+                )])
+                fig_sector.update_layout(height=350, margin=dict(t=20, b=20))
+                st.plotly_chart(fig_sector, use_container_width=True)
+        else:
+            st.info("Sector data not available")
+
+    with c3:
         st.subheader("Macro Regime")
         regime = R.get("regime")
         if regime:

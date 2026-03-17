@@ -82,7 +82,7 @@ def run_backtest(
     initial_value: float = 100_000.0,
     benchmark: str = "SPY",
 ) -> Dict:
-    from src.data_loader import get_price_data, get_fundamentals, get_fred_data
+    from src.data_loader import get_price_data, get_fundamentals, get_fred_data, get_sector_map
     from src.factor_model import (
         compute_value_score, compute_momentum_score,
         compute_quality_score, compute_composite_score,
@@ -92,10 +92,10 @@ def run_backtest(
         compute_expected_returns, compute_covariance_matrix, optimize_portfolio,
     )
 
-    log.info(f"Starting backtest: {start_date} → {end_date} | "
+    log.info(f"Starting backtest: {start_date} -> {end_date} | "
              f"{len(tickers)} tickers | rebalance={rebalance_freq}")
 
-    # Load full price history (we'll filter with as_of_date at each step) 
+    # Load full price history (we'll filter with as_of_date at each step)
     prices = get_price_data(tickers, start_date, end_date)
     if prices.empty:
         raise ValueError("No price data available for the given tickers/dates")
@@ -108,6 +108,9 @@ def run_backtest(
     # Fetch fundamentals and FRED data (full history, filtered per step)
     fundamentals = get_fundamentals(tickers)
     fred = get_fred_data()
+
+    # Get sector map for sector constraints
+    sector_map = get_sector_map(tickers)
 
     # Walk-forward loop 
     weights_history = []
@@ -144,10 +147,11 @@ def run_backtest(
             exp_ret = compute_expected_returns(prices_filtered, composite)
             cov     = compute_covariance_matrix(prices_filtered)
 
-            # 6. Optimize portfolio
+            # 6. Optimize portfolio with sector constraints
             opt = optimize_portfolio(
                 exp_ret, cov,
                 yield_multiplier=macro["yield_multiplier"],
+                sector_map=sector_map,
             )
             new_weights = opt["weights"]
 
@@ -224,6 +228,7 @@ def run_backtest(
         "weights_history":   weights_history,
         "turnover":          turnover_list,
         "rebalance_dates":   rebalance_dates,
+        "sector_map":        sector_map,
         "metadata": {
             "tickers":         tickers,
             "start_date":      start_date,

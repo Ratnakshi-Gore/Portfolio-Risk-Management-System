@@ -72,8 +72,11 @@ def compute_value_score(
         raise ValueError(f"fundamentals missing columns: {missing}")
 
     # Lower P/B and P/E = cheaper = better → flip sign
+    # Exclude negative P/E (unprofitable companies) — negative earnings is not "cheap"
+    pe_clean = fundamentals["pe_ratio"].copy()
+    pe_clean[pe_clean <= 0] = np.nan
     pb_score  = _safe_score(fundamentals["pb_ratio"],  higher_is_better=False)
-    pe_score  = _safe_score(fundamentals["pe_ratio"],  higher_is_better=False)
+    pe_score  = _safe_score(pe_clean,  higher_is_better=False)
     fcf_score = _safe_score(fundamentals["fcf_yield"], higher_is_better=True)
 
     value = (

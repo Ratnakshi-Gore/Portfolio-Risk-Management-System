@@ -134,6 +134,8 @@ def optimize_portfolio(
     yield_multiplier: float = 1.0,
     objective: str = "sharpe",
     max_weight: float = MAX_WEIGHT,
+    sector_map: Optional[Dict[str, str]] = None,
+    max_sector_weight: float = 0.40,
 ) -> Dict:
     tickers = expected_returns.index.tolist()
     n = len(tickers)
@@ -151,6 +153,26 @@ def optimize_portfolio(
     constraints = [
         {"type": "eq", "fun": lambda w: np.sum(w) - budget},  # weights sum to budget
     ]
+
+    # Sector constraints: max weight per sector
+    sector_alloc = {}
+    if sector_map is not None:
+        from collections import defaultdict
+        sector_indices = defaultdict(list)
+        for i, t in enumerate(tickers):
+            sec = sector_map.get(t, "Unknown")
+            sector_indices[sec].append(i)
+            sector_alloc[sec] = sector_alloc.get(sec, [])
+            sector_alloc[sec].append(t)
+
+        for sec, indices in sector_indices.items():
+            if len(indices) < n:  # only constrain if sector doesn't hold all tickers
+                idx = indices  # capture for closure
+                constraints.append({
+                    "type": "ineq",
+                    "fun": lambda w, idx=idx: max_sector_weight - sum(w[i] for i in idx),
+                })
+        log.info(f"Sector constraints: {len(sector_indices)} sectors, max {max_sector_weight:.0%} each")
 
     # Relax cap for small universes so constraints stay feasible
     eff_max = _effective_max_weight(n, budget, max_weight)
@@ -218,13 +240,25 @@ def optimize_portfolio(
         f"(yield_mult={yield_multiplier:.2f})"
     )
 
+    # Compute sector allocation from final weights
+    sector_weights = {}
+    if sector_map is not None:
+        from collections import defaultdict
+        sw = defaultdict(float)
+        for t, w in weights_series.items():
+            sec = sector_map.get(t, "Unknown")
+            sw[sec] += w
+        sector_weights = dict(sw)
+
     return {
-        "weights":         weights_series,
-        "expected_return": port_return,
-        "volatility":      port_vol,
-        "sharpe_ratio":    sharpe,
-        "cash_weight":     cash_weight,
-        "converged":       best_result is not None,
+        "weights":          weights_series,
+        "expected_return":  port_return,
+        "volatility":       port_vol,
+        "sharpe_ratio":     sharpe,
+        "cash_weight":      cash_weight,
+        "converged":        best_result is not None,
+        "sector_weights":   sector_weights,
+        "sector_map":       sector_map or {},
     }
 
 
