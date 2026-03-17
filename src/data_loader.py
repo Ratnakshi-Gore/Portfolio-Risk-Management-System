@@ -1,8 +1,3 @@
-"""
-Single entry point for all external data fetching.
-All data is cached to data/processed/ as parquet files with TTL-based invalidation.
-"""
-
 import os
 import json
 import time
@@ -92,12 +87,7 @@ def get_price_data(
     end: str,
     as_of_date: Optional[str] = None,
 ) -> pd.DataFrame:
-    """
-    Fetch daily adjusted closing prices for a list of tickers.
 
-    Returns a DataFrame with tickers as columns, dates as index.
-    If as_of_date is set, data is clipped to that date (lookahead prevention).
-    """
     tickers = sorted(set(tickers))
     key = _cache_key("prices", {"tickers": tickers, "start": start, "end": end})
 
@@ -140,14 +130,6 @@ def get_fundamentals(
     tickers: List[str],
     as_of_date: Optional[str] = None,
 ) -> pd.DataFrame:
-    """
-    Fetch key fundamental metrics from yfinance for each ticker.
-
-    Returns a DataFrame indexed by ticker with columns:
-    pb_ratio, pe_ratio, fcf_yield, roe, profit_margin,
-    current_ratio, debt_to_equity, earnings_quality, fcf_quality.
-
-    """
     tickers = sorted(set(tickers))
     key = _cache_key("fundamentals", {"tickers": tickers})
 
@@ -172,7 +154,9 @@ def get_fundamentals(
             # FCF yield = freeCashflow / marketCap
             fcf  = info.get("freeCashflow", np.nan)
             mcap = info.get("marketCap", np.nan)
-            fcf_yield = (fcf / mcap) if (fcf and mcap and mcap != 0) else np.nan
+            fcf_yield = (fcf / mcap) if (fcf is not None and mcap is not None
+                                         and not np.isnan(fcf) and not np.isnan(mcap)
+                                         and mcap != 0) else np.nan
 
             # Quality 
             roe            = info.get("returnOnEquity", np.nan)
@@ -185,14 +169,18 @@ def get_fundamentals(
             net_income = info.get("netIncomeToCommon", np.nan)
             earnings_quality = (
                 op_cf / abs(net_income)
-                if (op_cf and net_income and net_income != 0)
+                if (op_cf is not None and net_income is not None
+                    and not np.isnan(op_cf) and not np.isnan(net_income)
+                    and net_income != 0)
                 else np.nan
             )
 
             # FCF quality: FCF / net income
             fcf_quality = (
                 fcf / abs(net_income)
-                if (fcf and net_income and net_income != 0)
+                if (fcf is not None and net_income is not None
+                    and not np.isnan(fcf) and not np.isnan(net_income)
+                    and net_income != 0)
                 else np.nan
             )
 
@@ -227,17 +215,6 @@ def get_fred_data(
     start: str = "2000-01-01",
     end: Optional[str] = None,
 ) -> pd.DataFrame:
-    """
-    Fetch macroeconomic time series from FRED via pandas_datareader.
-
-    Default series:
-      FEDFUNDS  - Effective Federal Funds Rate (monthly)
-      DGS10     - 10-Year Treasury yield (daily)
-      DGS2      - 2-Year Treasury yield (daily)
-      T10Y2Y    - 10Y-2Y spread (daily, direct from FRED)
-
-    Returns a DataFrame with series as columns, dates as index.
-    """
     if series_ids is None:
         series_ids = ["FEDFUNDS", "DGS10", "DGS2", "T10Y2Y"]
 
@@ -283,10 +260,6 @@ def get_fama_french_factors(
     start: str = "2000-01-01",
     end: Optional[str] = None,
 ) -> pd.DataFrame:
-    """
-    Fetch Fama-French 3-factor data from Ken French's website via pandas_datareader.
-    Returns a DataFrame with columns: Mkt-RF, SMB, HML, RF (monthly, as decimals).
-    """
     end = end or datetime.utcnow().strftime("%Y-%m-%d")
     key = _cache_key("fama_french", {"start": start, "end": end})
 
@@ -320,10 +293,6 @@ def get_fama_french_factors(
 
 
 def get_sp500_tickers() -> List[str]:
-    """
-    Scrape current S&P 500 constituents from Wikipedia.
-    Returns a sorted list of ticker symbols.
-    """
     key = _cache_key("sp500", {})
 
     if _is_cache_valid(key, TTL["sp500"]):
@@ -346,7 +315,7 @@ def get_sp500_tickers() -> List[str]:
         tables = pd.read_html(StringIO(resp.text))
         df = tables[0][["Symbol", "GICS Sector"]].copy()
         df.columns = ["ticker", "sector"]
-        # Wikipedia uses periods; yfinance uses hyphens (e.g. BRK.B → BRK-B)
+        # Wikipedia uses periods; yfinance uses hyphens (e.g. BRK.B to BRK-B)
         df["ticker"] = df["ticker"].str.replace(".", "-", regex=False)
         df.sort_values("ticker", inplace=True)
         df.reset_index(drop=True, inplace=True)

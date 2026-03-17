@@ -26,6 +26,7 @@ notebooks/.ipynb_checkpoints/
 
 # MLflow runs (large, regeneratable)
 mlruns/
+mlflow.db
 mlartifacts/
 
 # VS Code

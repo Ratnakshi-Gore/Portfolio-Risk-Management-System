@@ -1,0 +1,50 @@
+'-----------------------------------------------------------------
+' VBA Macro for Portfolio Risk Management Tool
+' Paste this into Module1 in the VBA editor (Alt+F11)
+'-----------------------------------------------------------------
+' This macro reads tickers from B3 and backtest years from B4,
+' then calls the Python excel_bridge.py script which runs the
+' full pipeline and writes results back to all 3 sheets via
+' win32com COM automation.
+'-----------------------------------------------------------------
+
+Sub RunAnalysis()
+    Dim pythonExe As String
+    Dim scriptPath As String
+    Dim tickers As String
+    Dim years As String
+    Dim wbName As String
+    Dim cmd As String
+
+    ' --- Configuration ---
+    pythonExe = "C:\Users\Meow\AppData\Local\Programs\Python\Python312\python.exe"
+    scriptPath = ThisWorkbook.Path & "\..\src\excel_bridge.py"
+
+    ' --- Read inputs from Analysis sheet ---
+    tickers = Trim(CStr(ThisWorkbook.Sheets("Analysis").Range("B3").Value))
+    years = Trim(CStr(ThisWorkbook.Sheets("Analysis").Range("B4").Value))
+    wbName = ThisWorkbook.Name
+
+    ' --- Validate ---
+    If tickers = "" Then
+        MsgBox "Please enter tickers in cell B3 (comma-separated)", vbExclamation, "Missing Input"
+        Exit Sub
+    End If
+    If years = "" Then years = "3"
+
+    ' --- Check if already running ---
+    If Trim(CStr(ThisWorkbook.Sheets("Analysis").Range("D3").Value)) = "RUNNING" Then
+        MsgBox "Analysis is already running. Please wait for it to finish.", vbInformation
+        Exit Sub
+    End If
+
+    ' --- Show status ---
+    ThisWorkbook.Sheets("Analysis").Range("D2").Value = "Launching pipeline..."
+    ThisWorkbook.Sheets("Analysis").Range("D2").Font.Color = RGB(0, 0, 200)
+
+    ' --- Build command ---
+    cmd = """" & pythonExe & """ """ & scriptPath & """ """ & tickers & """ " & years & " """ & wbName & """"
+
+    ' --- Launch Python (async - Excel stays responsive) ---
+    Shell cmd, vbNormalFocus
+End Sub
